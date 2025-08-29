@@ -14,8 +14,8 @@ export class NeuraIanustecApi implements ICredentialType {
 			displayName: 'Base URL',
 			name: 'baseUrl',
 			type: 'string',
-			default: 'https://api.openai.com/v1',
-			description: 'The base URL for the API endpoint (e.g., https://api.openai.com/v1 or your custom endpoint)',
+			default: 'http://llm-neura-service.llm-neura.svc.cluster.local/v1',
+			description: 'The base URL for the NEURA API endpoint (pre-configured for internal NEURA services)',
 			required: true,
 		},
 		{
@@ -25,8 +25,8 @@ export class NeuraIanustecApi implements ICredentialType {
 			typeOptions: {
 				password: true,
 			},
-			default: '',
-			description: 'Your API key for authentication',
+			default: 'aa3cd3ec5a34b5d180a83927dd1f604c0164e28685b3e5cf93ecf04f0c2667ee',
+			description: 'Your NEURA API key for authentication (pre-configured for internal services)',
 			required: true,
 		},
 		{
@@ -34,7 +34,7 @@ export class NeuraIanustecApi implements ICredentialType {
 			name: 'organization',
 			type: 'string',
 			default: '',
-			description: 'Optional organization ID for OpenAI API requests',
+			description: 'Optional organization ID (leave empty for NEURA internal services)',
 			required: false,
 		},
 		{
@@ -49,8 +49,8 @@ export class NeuraIanustecApi implements ICredentialType {
 			displayName: 'Reject Unauthorized',
 			name: 'rejectUnauthorized',
 			type: 'boolean',
-			default: true,
-			description: 'Whether to reject requests with invalid SSL certificates',
+			default: false,
+			description: 'Whether to reject requests with invalid SSL certificates (disabled for internal NEURA services)',
 			required: false,
 		},
 	];
