@@ -1,0 +1,187 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: n8n-neura-ianustec-node-installer
+  namespace: lair
+  labels:
+    app.kubernetes.io/name: n8n-node-installer
+    app.kubernetes.io/component: installer
+    app.kubernetes.io/part-of: neura-services
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    description: "Installs NEURA | IANUSTEC AI Community Node for n8n after deployment is ready"
+spec:
+  # Job will be cleaned up automatically after 24 hours
+  ttlSecondsAfterFinished: 86400
+
+  # Retry policy
+  backoffLimit: 3
+
+  # Job template
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: n8n-node-installer
+        app.kubernetes.io/component: installer
+        app.kubernetes.io/part-of: neura-services
+      annotations:
+        description: "NEURA | IANUSTEC AI Node Installer Pod"
+    spec:
+      serviceAccountName: n8n-node-installer
+      restartPolicy: Never
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      # Init container to wait for n8n readiness
+      initContainers:
+      - name: wait-for-n8n
+        image: curlimages/curl:8.5.0
+        imagePullPolicy: IfNotPresent
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+
+        env:
+        - name: N8N_SERVICE_NAME
+          value: "n8n"
+        - name: N8N_NAMESPACE
+          value: "lair"
+        - name: N8N_PORT
+          value: "5678"
+        - name: MAX_WAIT_TIME
+          value: "300"
+        - name: CHECK_INTERVAL
+          value: "10"
+
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "🔍 Waiting for n8n service to be ready..."
+
+          MAX_WAIT=${MAX_WAIT_TIME:-300}
+          CHECK_INTERVAL=${CHECK_INTERVAL:-10}
+          elapsed=0
+
+          while [ $elapsed -lt $MAX_WAIT ]; do
+            echo "⏳ Checking n8n health (${elapsed}/${MAX_WAIT}s)..."
+            
+            if curl -f -s --max-time 5 "http://${N8N_SERVICE_NAME}.${N8N_NAMESPACE}.svc.cluster.local:${N8N_PORT}/healthz" > /dev/null 2>&1; then
+              echo "✅ n8n is ready!"
+              exit 0
+            fi
+            
+            echo "💤 n8n not ready, waiting ${CHECK_INTERVAL}s..."
+            sleep $CHECK_INTERVAL
+            elapsed=$((elapsed + CHECK_INTERVAL))
+          done
+
+          echo "❌ Timeout waiting for n8n after ${MAX_WAIT}s"
+          exit 1
+
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 32Mi
+      # Main container for node installation
+      containers:
+      - name: node-installer
+        image: node:18-alpine
+        imagePullPolicy: IfNotPresent
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: N8N_SERVICE_NAME
+          value: "n8n"
+        - name: N8N_NAMESPACE
+          value: "lair"
+        - name: N8N_PORT
+          value: "5678"
+        - name: NODE_PACKAGE
+          value: "n8n-nodes-neura-ianustec"
+        - name: NODE_VERSION
+          value: "0.1.0"
+        # Optional: Path to n8n nodes directory if using shared volume
+        # - name: N8N_NODES_PATH
+        #   value: "/n8n/nodes"
+
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Install required packages
+          apk add --no-cache curl kubectl
+
+          # Execute the installation script
+          /scripts/install-node.sh
+
+        volumeMounts:
+        - name: install-script
+          mountPath: /scripts
+          readOnly: true
+        - name: temp-storage
+          mountPath: /tmp
+        # Optional: Mount shared volume for n8n nodes
+        # - name: n8n-nodes
+        #   mountPath: /n8n/nodes
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+      volumes:
+      - name: install-script
+        configMap:
+          name: n8n-node-installer-script
+          defaultMode: 755
+      - name: temp-storage
+        emptyDir:
+          sizeLimit: 1Gi
+      # Optional: Shared volume for n8n nodes (if n8n uses persistent storage)
+      # - name: n8n-nodes
+      #   persistentVolumeClaim:
+      #     claimName: n8n-nodes-pvc
+
+      # Node selector and tolerations (optional)
+      nodeSelector:
+        kubernetes.io/os: linux
+
+      # Affinity to prefer running on the same node as n8n (optional)
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: n8n
+              topologyKey: kubernetes.io/hostname

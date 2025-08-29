@@ -26,7 +26,22 @@ A powerful n8n Community Node for integrating with **NEURA | IANUSTEC AI** servi
 3. Enter: `n8n-nodes-neura-ianustec`
 4. Click **Install**
 
-### Option 2: Manual Installation
+### Option 2: Kubernetes Deployment (Recommended for Production)
+
+For automatic installation in Kubernetes environments:
+
+```bash
+# Quick deployment in 'lair' namespace
+cd k8s/
+./deploy.sh
+
+# Monitor installation
+kubectl logs -f job/n8n-neura-ianustec-node-installer -n lair
+```
+
+See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructions.
+
+### Option 3: Manual Installation
 
 ```bash
 # Navigate to your n8n installation
@@ -38,7 +53,7 @@ npm install n8n-nodes-neura-ianustec
 # Restart n8n
 ```
 
-### Option 3: Development Installation
+### Option 4: Development Installation
 
 ```bash
 # Clone the repository

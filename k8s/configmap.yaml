@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-node-installer-script
+  namespace: lair
+  labels:
+    app.kubernetes.io/name: n8n-node-installer
+    app.kubernetes.io/part-of: neura-services
+data:
+  install-node.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    echo "🚀 NEURA | IANUSTEC AI Node Installer Started"
+    echo "============================================="
+
+    # Configuration
+    N8N_SERVICE_NAME="${N8N_SERVICE_NAME:-n8n}"
+    N8N_NAMESPACE="${N8N_NAMESPACE:-lair}"
+    N8N_PORT="${N8N_PORT:-5678}"
+    MAX_WAIT_TIME="${MAX_WAIT_TIME:-300}"
+    CHECK_INTERVAL="${CHECK_INTERVAL:-10}"
+    NODE_PACKAGE="${NODE_PACKAGE:-n8n-nodes-neura-ianustec}"
+    NODE_VERSION="${NODE_VERSION:-0.1.0}"
+
+    echo "📋 Configuration:"
+    echo "  - N8N Service: ${N8N_SERVICE_NAME}.${N8N_NAMESPACE}.svc.cluster.local:${N8N_PORT}"
+    echo "  - Node Package: ${NODE_PACKAGE}@${NODE_VERSION}"
+    echo "  - Max Wait Time: ${MAX_WAIT_TIME}s"
+    echo ""
+
+    # Function to check if n8n is ready
+    check_n8n_ready() {
+        local url="http://${N8N_SERVICE_NAME}.${N8N_NAMESPACE}.svc.cluster.local:${N8N_PORT}/healthz"
+        echo "🔍 Checking n8n health at: ${url}"
+        
+        if curl -f -s --max-time 5 "${url}" > /dev/null 2>&1; then
+            echo "✅ n8n is healthy and ready!"
+            return 0
+        else
+            echo "⏳ n8n is not ready yet..."
+            return 1
+        fi
+    }
+
+    # Function to check if n8n deployment/statefulset is ready
+    check_n8n_deployment_ready() {
+        echo "🔍 Checking n8n deployment status..."
+        
+        # Check for deployment
+        if kubectl get deployment "${N8N_SERVICE_NAME}" -n "${N8N_NAMESPACE}" >/dev/null 2>&1; then
+            local ready_replicas=$(kubectl get deployment "${N8N_SERVICE_NAME}" -n "${N8N_NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+            local desired_replicas=$(kubectl get deployment "${N8N_SERVICE_NAME}" -n "${N8N_NAMESPACE}" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+            
+            if [[ "${ready_replicas}" == "${desired_replicas}" ]] && [[ "${ready_replicas}" != "0" ]]; then
+                echo "✅ n8n deployment is ready (${ready_replicas}/${desired_replicas} replicas)"
+                return 0
+            else
+                echo "⏳ n8n deployment not ready (${ready_replicas}/${desired_replicas} replicas)"
+                return 1
+            fi
+        fi
+        
+        # Check for statefulset
+        if kubectl get statefulset "${N8N_SERVICE_NAME}" -n "${N8N_NAMESPACE}" >/dev/null 2>&1; then
+            local ready_replicas=$(kubectl get statefulset "${N8N_SERVICE_NAME}" -n "${N8N_NAMESPACE}" -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+            local desired_replicas=$(kubectl get statefulset "${N8N_SERVICE_NAME}" -n "${N8N_NAMESPACE}" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "1")
+            
+            if [[ "${ready_replicas}" == "${desired_replicas}" ]] && [[ "${ready_replicas}" != "0" ]]; then
+                echo "✅ n8n statefulset is ready (${ready_replicas}/${desired_replicas} replicas)"
+                return 0
+            else
+                echo "⏳ n8n statefulset not ready (${ready_replicas}/${desired_replicas} replicas)"
+                return 1
+            fi
+        fi
+        
+        echo "❌ No n8n deployment or statefulset found"
+        return 1
+    }
+
+    # Wait for n8n to be ready
+    echo "⏳ Waiting for n8n to be ready..."
+    elapsed=0
+
+    while [[ $elapsed -lt $MAX_WAIT_TIME ]]; do
+        if check_n8n_deployment_ready && check_n8n_ready; then
+            echo "🎉 n8n is fully ready! Proceeding with node installation..."
+            break
+        fi
+        
+        echo "💤 Waiting ${CHECK_INTERVAL}s before next check... (${elapsed}/${MAX_WAIT_TIME}s elapsed)"
+        sleep $CHECK_INTERVAL
+        elapsed=$((elapsed + CHECK_INTERVAL))
+    done
+
+    if [[ $elapsed -ge $MAX_WAIT_TIME ]]; then
+        echo "❌ Timeout waiting for n8n to be ready after ${MAX_WAIT_TIME}s"
+        echo "🔍 Final status check:"
+        check_n8n_deployment_ready || true
+        check_n8n_ready || true
+        exit 1
+    fi
+
+    # Install the n8n community node
+    echo ""
+    echo "📦 Installing NEURA | IANUSTEC AI Community Node..."
+    echo "=================================================="
+
+    # Create temporary directory for node installation
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+
+    echo "📁 Working directory: $TEMP_DIR"
+    echo "🔧 Installing Node.js dependencies..."
+
+    # Initialize npm project
+    npm init -y
+
+    # Install the community node
+    echo "📥 Installing ${NODE_PACKAGE}@${NODE_VERSION}..."
+    if npm install "${NODE_PACKAGE}@${NODE_VERSION}"; then
+        echo "✅ Successfully installed ${NODE_PACKAGE}@${NODE_VERSION}"
+    else
+        echo "❌ Failed to install ${NODE_PACKAGE}@${NODE_VERSION}"
+        exit 1
+    fi
+
+    # Verify installation
+    echo "🔍 Verifying installation..."
+    if npm list "${NODE_PACKAGE}" --depth=0; then
+        echo "✅ Node package verification successful"
+    else
+        echo "❌ Node package verification failed"
+        exit 1
+    fi
+
+    # Copy node files to n8n nodes directory (if accessible via shared volume)
+    if [[ -n "${N8N_NODES_PATH:-}" ]] && [[ -d "${N8N_NODES_PATH}" ]]; then
+        echo "📂 Copying node files to n8n nodes directory: ${N8N_NODES_PATH}"
+        
+        # Create target directory
+        TARGET_DIR="${N8N_NODES_PATH}/${NODE_PACKAGE}"
+        mkdir -p "$TARGET_DIR"
+        
+        # Copy node_modules content
+        if cp -r "node_modules/${NODE_PACKAGE}"/* "$TARGET_DIR/"; then
+            echo "✅ Successfully copied node files to ${TARGET_DIR}"
+        else
+            echo "❌ Failed to copy node files"
+            exit 1
+        fi
+    else
+        echo "ℹ️  N8N_NODES_PATH not set or not accessible, skipping file copy"
+        echo "   The node should be installed via n8n's Community Nodes UI instead"
+    fi
+
+    # Cleanup
+    cd /
+    rm -rf "$TEMP_DIR"
+
+    echo ""
+    echo "🎊 NEURA | IANUSTEC AI Node Installation Completed Successfully!"
+    echo "=============================================================="
+    echo ""
+    echo "📋 Next Steps:"
+    echo "1. The node package has been verified and is available"
+    echo "2. Install it in n8n via Settings → Community Nodes → Install: ${NODE_PACKAGE}"
+    echo "3. Create credentials: NEURA | IANUSTEC AI API"
+    echo "4. Start using Chat Completions and Embeddings in your workflows!"
+    echo ""
+    echo "🔗 Documentation: https://github.com/ianustec/n8n-nodes-neura-ianustec"
+    echo ""
+    echo "✨ Happy Automating with NEURA | IANUSTEC AI! ✨"

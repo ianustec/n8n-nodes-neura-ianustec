@@ -1,0 +1,133 @@
+# NEURA | IANUSTEC AI Node Installer - Configuration Values
+# ========================================================
+
+# Global configuration
+global:
+  namespace: lair
+  
+# Job configuration
+job:
+  name: n8n-neura-ianustec-node-installer
+  
+  # Job behavior
+  ttlSecondsAfterFinished: 86400  # 24 hours
+  backoffLimit: 3
+  
+  # n8n service configuration
+  n8n:
+    serviceName: n8n
+    namespace: lair
+    port: 5678
+    
+  # Timing configuration
+  timing:
+    maxWaitTime: 300      # 5 minutes
+    checkInterval: 10     # 10 seconds
+    
+  # Node package configuration
+  nodePackage:
+    name: n8n-nodes-neura-ianustec
+    version: "0.1.0"
+    
+  # Optional: Shared volume for n8n nodes
+  # sharedVolume:
+  #   enabled: false
+  #   pvcName: n8n-nodes-pvc
+  #   mountPath: /n8n/nodes
+
+# Container configuration
+containers:
+  # Init container (wait for n8n)
+  waitForN8n:
+    image:
+      repository: curlimages/curl
+      tag: "8.5.0"
+      pullPolicy: IfNotPresent
+    
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 100m
+        memory: 32Mi
+        
+  # Main container (node installer)
+  nodeInstaller:
+    image:
+      repository: node
+      tag: "18-alpine"
+      pullPolicy: IfNotPresent
+      
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# Security configuration
+security:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  
+  # Security context for init container
+  initContainer:
+    runAsUser: 65534
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+
+# ServiceAccount and RBAC
+serviceAccount:
+  create: true
+  name: n8n-node-installer
+  
+rbac:
+  create: true
+
+# Node selector and affinity
+nodeSelector:
+  kubernetes.io/os: linux
+
+# Affinity to prefer running on the same node as n8n
+affinity:
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: n8n
+        topologyKey: kubernetes.io/hostname
+
+# Tolerations (if needed)
+tolerations: []
+
+# Labels and annotations
+labels:
+  app.kubernetes.io/name: n8n-node-installer
+  app.kubernetes.io/component: installer
+  app.kubernetes.io/part-of: neura-services
+  app.kubernetes.io/version: "0.1.0"
+
+annotations:
+  description: "Installs NEURA | IANUSTEC AI Community Node for n8n after deployment is ready"
+
+# Environment variables (additional)
+extraEnv: []
+  # - name: CUSTOM_VAR
+  #   value: "custom-value"
+
+# Volume mounts (additional)
+extraVolumeMounts: []
+  # - name: custom-volume
+  #   mountPath: /custom
+
+# Volumes (additional)
+extraVolumes: []
+  # - name: custom-volume
+  #   configMap:
+  #     name: custom-config
