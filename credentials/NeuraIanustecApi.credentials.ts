@@ -8,7 +8,7 @@ import {
 export class NeuraIanustecApi implements ICredentialType {
 	name = 'neuraIanustecApi';
 	displayName = 'NEURA | IANUSTEC AI API';
-	documentationUrl = 'neuraIanustec';
+	documentationUrl = 'httpsGithubComIanustecN8nNodesNeuraIanustec';
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Base URL',
