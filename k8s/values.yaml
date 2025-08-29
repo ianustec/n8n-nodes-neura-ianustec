@@ -4,38 +4,42 @@
 # Global configuration
 global:
   namespace: lair
-  
+
 # Job configuration
 job:
   name: n8n-neura-ianustec-node-installer
-  
+
   # Job behavior
-  ttlSecondsAfterFinished: 86400  # 24 hours
+  ttlSecondsAfterFinished: 86400 # 24 hours
   backoffLimit: 3
-  
+
   # n8n service configuration
   n8n:
     serviceName: n8n
     namespace: lair
     port: 5678
-    
+
   # Timing configuration
   timing:
-    maxWaitTime: 300      # 5 minutes
-    checkInterval: 10     # 10 seconds
-    
+    maxWaitTime: 300 # 5 minutes
+    checkInterval: 10 # 10 seconds
+
   # Node package configuration
   nodePackage:
     name: n8n-nodes-neura-ianustec
     version: "0.1.0"
-    
+
+  # NEURA Internal Service Configuration
+  neura:
+    baseUrl: "http://llm-neura-service.llm-neura.svc.cluster.local/v1"
+    apiKey: "aa3cd3ec5a34b5d180a83927dd1f604c0164e28685b3e5cf93ecf04f0c2667ee"
   # Optional: Shared volume for n8n nodes
   # sharedVolume:
   #   enabled: false
   #   pvcName: n8n-nodes-pvc
   #   mountPath: /n8n/nodes
 
-# Container configuration
+  # Container configuration
 containers:
   # Init container (wait for n8n)
   waitForN8n:
@@ -43,7 +47,7 @@ containers:
       repository: curlimages/curl
       tag: "8.5.0"
       pullPolicy: IfNotPresent
-    
+
     resources:
       requests:
         cpu: 10m
@@ -51,14 +55,14 @@ containers:
       limits:
         cpu: 100m
         memory: 32Mi
-        
+
   # Main container (node installer)
   nodeInstaller:
     image:
       repository: node
       tag: "18-alpine"
       pullPolicy: IfNotPresent
-      
+
     resources:
       requests:
         cpu: 100m
@@ -73,7 +77,7 @@ security:
   runAsUser: 1000
   runAsGroup: 1000
   fsGroup: 1000
-  
+
   # Security context for init container
   initContainer:
     runAsUser: 65534
@@ -84,7 +88,7 @@ security:
 serviceAccount:
   create: true
   name: n8n-node-installer
-  
+
 rbac:
   create: true
 

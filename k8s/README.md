@@ -49,8 +49,11 @@ k8s/
 ### Deployment Automatico
 
 ```bash
-# Deploy tutto con un comando
+# Deploy tutto con un comando (credenziali in plain text)
 ./k8s/deploy.sh
+
+# Deploy con Secret per credenziali sicure
+USE_SECRET=true ./k8s/deploy.sh
 
 # Con opzioni personalizzate
 NAMESPACE=lair WAIT_FOR_COMPLETION=true ./k8s/deploy.sh
@@ -68,8 +71,13 @@ kubectl apply -f k8s/namespace.yaml
 # 2. Applica ConfigMap con script
 kubectl apply -f k8s/configmap.yaml
 
-# 3. Avvia il job
+# 3a. (Opzionale) Applica Secret per credenziali sicure
+kubectl apply -f k8s/secret.yaml
+
+# 3b. Avvia il job (normale o con secret)
 kubectl apply -f k8s/job.yaml
+# OPPURE per versione con secret:
+kubectl apply -f k8s/job-with-secret.yaml
 ```
 
 ## 🔧 Configurazione
@@ -87,6 +95,8 @@ Il job può essere configurato tramite variabili d'ambiente nel file `job.yaml`:
 | `CHECK_INTERVAL` | `10` | Intervallo di controllo in secondi |
 | `NODE_PACKAGE` | `n8n-nodes-neura-ianustec` | Nome del pacchetto npm |
 | `NODE_VERSION` | `0.1.0` | Versione del pacchetto |
+| `NEURA_BASE_URL` | `http://llm-neura-service.llm-neura.svc.cluster.local/v1` | URL del servizio NEURA interno |
+| `NEURA_API_KEY` | `aa3cd3ec...` | API Key per il servizio NEURA |
 
 ### Script di Deployment
 
@@ -98,6 +108,7 @@ Lo script `deploy.sh` supporta le seguenti variabili:
 | `KUBECTL_CONTEXT` | - | Contesto kubectl da usare |
 | `DRY_RUN` | `false` | Modalità dry-run |
 | `WAIT_FOR_COMPLETION` | `true` | Aspetta completamento job |
+| `USE_SECRET` | `false` | Usa Secret per credenziali sicure |
 
 ## 📊 Monitoraggio
 

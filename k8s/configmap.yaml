@@ -107,6 +107,14 @@ data:
     echo "📦 Installing NEURA | IANUSTEC AI Community Node..."
     echo "=================================================="
 
+    # Configuration for NEURA internal services
+    NEURA_BASE_URL="${NEURA_BASE_URL:-http://llm-neura-service.llm-neura.svc.cluster.local/v1}"
+    NEURA_API_KEY="${NEURA_API_KEY:-aa3cd3ec5a34b5d180a83927dd1f604c0164e28685b3e5cf93ecf04f0c2667ee}"
+
+    echo "🔧 NEURA Configuration:"
+    echo "  - Base URL: ${NEURA_BASE_URL}"
+    echo "  - API Key: ${NEURA_API_KEY:0:8}...${NEURA_API_KEY: -8}"
+
     # Create temporary directory for node installation
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR"
@@ -159,15 +167,81 @@ data:
     cd /
     rm -rf "$TEMP_DIR"
 
+    # Configure n8n credentials automatically
+    echo ""
+    echo "🔧 Configuring NEURA | IANUSTEC AI Credentials in n8n..."
+    echo "======================================================="
+
+    N8N_API_URL="http://${N8N_SERVICE_NAME}.${N8N_NAMESPACE}.svc.cluster.local:${N8N_PORT}"
+
+    # Function to configure n8n credentials via API
+    configure_n8n_credentials() {
+        echo "🔑 Creating NEURA | IANUSTEC AI credentials in n8n..."
+        
+        # Check if n8n API is accessible
+        if ! curl -f -s --max-time 5 "${N8N_API_URL}/healthz" > /dev/null 2>&1; then
+            echo "⚠️  n8n API not accessible, skipping automatic credential configuration"
+            echo "   Please configure credentials manually in n8n UI"
+            return 1
+        fi
+        
+        # Create credentials payload
+        CREDENTIALS_PAYLOAD=$(cat <<EOF
+    {
+      "name": "NEURA Internal API",
+      "type": "neuraIanustecApi",
+      "data": {
+        "baseUrl": "${NEURA_BASE_URL}",
+        "apiKey": "${NEURA_API_KEY}",
+        "organization": "",
+        "timeout": 60000,
+        "rejectUnauthorized": false
+      }
+    }
+    EOF
+    )
+        
+        echo "📡 Attempting to create credentials via n8n API..."
+        
+        # Try to create credentials (this might fail if n8n requires authentication)
+        if curl -f -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "${CREDENTIALS_PAYLOAD}" \
+            "${N8N_API_URL}/rest/credentials" > /dev/null 2>&1; then
+            echo "✅ Successfully created NEURA credentials in n8n!"
+            return 0
+        else
+            echo "⚠️  Could not create credentials automatically (n8n may require authentication)"
+            echo "   Please create credentials manually with the following configuration:"
+            echo ""
+            echo "   Credential Type: NEURA | IANUSTEC AI API"
+            echo "   Name: NEURA Internal API"
+            echo "   Base URL: ${NEURA_BASE_URL}"
+            echo "   API Key: ${NEURA_API_KEY}"
+            echo "   Organization: (leave empty)"
+            echo "   Timeout: 60000"
+            echo "   Reject Unauthorized: false"
+            return 1
+        fi
+    }
+
+    # Try to configure credentials
+    configure_n8n_credentials || true
+
     echo ""
     echo "🎊 NEURA | IANUSTEC AI Node Installation Completed Successfully!"
     echo "=============================================================="
     echo ""
+    echo "📋 Configuration Summary:"
+    echo "✅ Node package installed and verified"
+    echo "✅ NEURA internal service configuration ready"
+    echo "   - Base URL: ${NEURA_BASE_URL}"
+    echo "   - API Key: Configured"
+    echo ""
     echo "📋 Next Steps:"
-    echo "1. The node package has been verified and is available"
-    echo "2. Install it in n8n via Settings → Community Nodes → Install: ${NODE_PACKAGE}"
-    echo "3. Create credentials: NEURA | IANUSTEC AI API"
-    echo "4. Start using Chat Completions and Embeddings in your workflows!"
+    echo "1. Install node in n8n: Settings → Community Nodes → Install: ${NODE_PACKAGE}"
+    echo "2. Verify credentials: Settings → Credentials → NEURA Internal API"
+    echo "3. Start using Chat Completions and Embeddings in your workflows!"
     echo ""
     echo "🔗 Documentation: https://github.com/ianustec/n8n-nodes-neura-ianustec"
     echo ""

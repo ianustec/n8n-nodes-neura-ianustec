@@ -17,6 +17,7 @@ NAMESPACE="${NAMESPACE:-lair}"
 KUBECTL_CONTEXT="${KUBECTL_CONTEXT:-}"
 DRY_RUN="${DRY_RUN:-false}"
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-true}"
+USE_SECRET="${USE_SECRET:-false}"
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,6 +69,7 @@ echo "   - Namespace: ${NAMESPACE}"
 echo "   - Kubectl Context: ${KUBECTL_CONTEXT:-default}"
 echo "   - Dry Run: ${DRY_RUN}"
 echo "   - Wait for Completion: ${WAIT_FOR_COMPLETION}"
+echo "   - Use Secret: ${USE_SECRET}"
 echo ""
 
 # Create namespace and RBAC
@@ -88,8 +90,27 @@ else
     exit 1
 fi
 
+# Apply Secret if using secret mode
+if [[ "${USE_SECRET}" == "true" ]]; then
+    print_status "${BLUE}" "🔐 Applying Secret with NEURA credentials..."
+    if run_kubectl apply -f "${SCRIPT_DIR}/secret.yaml"; then
+        print_status "${GREEN}" "✅ Secret applied successfully"
+    else
+        print_status "${RED}" "❌ Failed to apply Secret"
+        exit 1
+    fi
+fi
+
+# Determine job name and file based on secret usage
+if [[ "${USE_SECRET}" == "true" ]]; then
+    JOB_NAME="n8n-neura-ianustec-node-installer-secure"
+    JOB_FILE="${SCRIPT_DIR}/job-with-secret.yaml"
+else
+    JOB_NAME="n8n-neura-ianustec-node-installer"
+    JOB_FILE="${SCRIPT_DIR}/job.yaml"
+fi
+
 # Check if job already exists and delete it if needed
-JOB_NAME="n8n-neura-ianustec-node-installer"
 if run_kubectl get job "${JOB_NAME}" -n "${NAMESPACE}" &> /dev/null; then
     print_status "${YELLOW}" "⚠️  Job ${JOB_NAME} already exists, deleting it..."
     if run_kubectl delete job "${JOB_NAME}" -n "${NAMESPACE}" --ignore-not-found=true; then
@@ -105,7 +126,7 @@ fi
 
 # Apply Job
 print_status "${BLUE}" "🚀 Deploying node installer job..."
-if run_kubectl apply -f "${SCRIPT_DIR}/job.yaml"; then
+if run_kubectl apply -f "${JOB_FILE}"; then
     print_status "${GREEN}" "✅ Job deployed successfully"
 else
     print_status "${RED}" "❌ Failed to deploy job"

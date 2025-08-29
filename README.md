@@ -28,16 +28,24 @@ A powerful n8n Community Node for integrating with **NEURA | IANUSTEC AI** servi
 
 ### Option 2: Kubernetes Deployment (Recommended for Production)
 
-For automatic installation in Kubernetes environments:
+For automatic installation in Kubernetes environments with **pre-configured NEURA credentials**:
 
 ```bash
-# Quick deployment in 'lair' namespace
+# Quick deployment in 'lair' namespace (with NEURA internal service config)
 cd k8s/
 ./deploy.sh
+
+# Deploy with secure Secret-based credentials
+USE_SECRET=true ./deploy.sh
 
 # Monitor installation
 kubectl logs -f job/n8n-neura-ianustec-node-installer -n lair
 ```
+
+**Pre-configured NEURA Settings:**
+- **Base URL**: `http://llm-neura-service.llm-neura.svc.cluster.local/v1`
+- **API Key**: Automatically configured for internal NEURA services
+- **Credentials**: Created as "NEURA Internal API" in n8n
 
 See [k8s/README.md](k8s/README.md) for detailed Kubernetes deployment instructions.
 
